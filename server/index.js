@@ -9,14 +9,23 @@ import { dirname, join } from 'path';
 import ruleRoutes from './routes/rules.js';
 import geminiRoutes from './routes/gemini.js';
 
-// Load environment variables
-dotenv.config();
-
+// Get current directory for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Load environment variables from .env file in the server directory
+dotenv.config({ path: join(__dirname, '.env') });
+
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Log environment variables for debugging (remove in production)
+console.log('🔧 Environment variables loaded:');
+console.log('- PORT:', process.env.PORT || '3001 (default)');
+console.log('- NODE_ENV:', process.env.NODE_ENV || 'development (default)');
+console.log('- FRONTEND_URL:', process.env.FRONTEND_URL || 'not set');
+console.log('- GEMINI_API_KEY:', process.env.GEMINI_API_KEY ? '✅ Set' : '❌ Not set');
+console.log('- VITE_GEMINI_API_KEY:', process.env.VITE_GEMINI_API_KEY ? '✅ Set' : '❌ Not set');
 
 // Security middleware
 app.use(helmet({
@@ -60,7 +69,8 @@ app.get('/api/health', (req, res) => {
     status: 'OK', 
     timestamp: new Date().toISOString(),
     version: '1.0.0',
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    gemini_configured: !!(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY)
   });
 });
 
@@ -97,6 +107,15 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
   console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
+  
+  // Check if Gemini API key is configured
+  const hasGeminiKey = !!(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY);
+  if (hasGeminiKey) {
+    console.log('🤖 Gemini AI: ✅ API key configured');
+  } else {
+    console.log('🤖 Gemini AI: ❌ API key not found in environment variables');
+    console.log('   Add GEMINI_API_KEY to your server/.env file');
+  }
 });
 
 export default app;

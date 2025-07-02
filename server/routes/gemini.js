@@ -8,10 +8,16 @@ let genAI = null;
 let model = null;
 
 const initializeGemini = () => {
-  const apiKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  // Try both environment variable names
+  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+  
+  console.log('🔍 Initializing Gemini AI...');
+  console.log('- GEMINI_API_KEY:', process.env.GEMINI_API_KEY ? '✅ Found' : '❌ Not found');
+  console.log('- VITE_GEMINI_API_KEY:', process.env.VITE_GEMINI_API_KEY ? '✅ Found' : '❌ Not found');
   
   if (!apiKey) {
-    console.warn('Gemini API key not found. AI parsing will use fallback method.');
+    console.warn('⚠️  Gemini API key not found. AI parsing will use fallback method.');
+    console.warn('   Please add GEMINI_API_KEY to your server/.env file');
     return false;
   }
 
@@ -21,7 +27,7 @@ const initializeGemini = () => {
     console.log('✅ Gemini AI initialized successfully');
     return true;
   } catch (error) {
-    console.error('❌ Failed to initialize Gemini:', error);
+    console.error('❌ Failed to initialize Gemini:', error.message);
     return false;
   }
 };
@@ -31,14 +37,19 @@ const isGeminiAvailable = initializeGemini();
 
 // Get Gemini status
 router.get('/status', (req, res) => {
-  const apiKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
   
   res.json({
     success: true,
     data: {
       available: model !== null,
       apiKey: !!apiKey,
-      model: model ? 'gemini-pro' : null
+      model: model ? 'gemini-pro' : null,
+      debug: {
+        gemini_api_key_set: !!process.env.GEMINI_API_KEY,
+        vite_gemini_api_key_set: !!process.env.VITE_GEMINI_API_KEY,
+        using_key: apiKey ? 'Found' : 'Not found'
+      }
     }
   });
 });
@@ -58,20 +69,23 @@ router.post('/parse', async (req, res) => {
 
     // If Gemini is not available, use fallback parsing
     if (!model) {
+      console.log('🔄 Using fallback parsing (Gemini not available)');
       const fallbackResult = fallbackParsing(instruction);
       return res.json(fallbackResult);
     }
 
     try {
+      console.log('🤖 Processing with Gemini AI:', instruction.substring(0, 50) + '...');
       const prompt = buildPrompt(instruction);
       const result = await model.generateContent(prompt);
       const response = await result.response;
       const text = response.text();
 
       const parsedResult = parseGeminiResponse(text, instruction);
+      console.log('✅ Gemini parsing completed');
       res.json(parsedResult);
     } catch (error) {
-      console.error('Gemini API error:', error);
+      console.error('❌ Gemini API error:', error.message);
       // Fall back to rule-based parsing on error
       const fallbackResult = fallbackParsing(instruction);
       res.json(fallbackResult);
@@ -199,7 +213,7 @@ const fallbackParsing = (instruction) => {
       success: false,
       error: 'Could not determine rule type. Please check your Gemini API configuration.',
       suggestions: [
-        'Ensure GEMINI_API_KEY is set in your environment',
+        'Ensure GEMINI_API_KEY is set in your server/.env file',
         'Try using more specific keywords like "expense", "vendor", "category"',
         'Include threshold amounts with $ symbol'
       ]
