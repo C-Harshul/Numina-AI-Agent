@@ -1,9 +1,7 @@
-import { ParsedRule, ConversionResult } from '../types/audit';
-import { GeminiService } from './geminiService';
+import { ConversionResult } from '../types/audit';
+import { apiClient } from './apiClient';
 
 export class RuleParser {
-  private static geminiService = new GeminiService();
-
   static async parseInstruction(instruction: string): Promise<ConversionResult> {
     if (!instruction.trim()) {
       return {
@@ -14,8 +12,8 @@ export class RuleParser {
     }
 
     try {
-      // Use Gemini service for parsing
-      return await this.geminiService.parseInstruction(instruction);
+      const response = await apiClient.parseInstruction(instruction);
+      return response;
     } catch (error) {
       console.error('Rule parsing error:', error);
       return {
@@ -23,18 +21,29 @@ export class RuleParser {
         error: `Failed to parse instruction: ${error instanceof Error ? error.message : 'Unknown error'}`,
         suggestions: [
           'Check your internet connection',
-          'Verify your Gemini API key is configured correctly',
+          'Verify the backend server is running',
           'Try simplifying your instruction'
         ]
       };
     }
   }
 
-  static getParserStatus() {
-    return this.geminiService.getStatus();
+  static async getParserStatus() {
+    try {
+      const response = await apiClient.getGeminiStatus();
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get parser status:', error);
+      return { available: false, apiKey: false };
+    }
   }
 
-  static isGeminiAvailable(): boolean {
-    return this.geminiService.isGeminiAvailable();
+  static async isGeminiAvailable(): Promise<boolean> {
+    try {
+      const status = await this.getParserStatus();
+      return status.available;
+    } catch {
+      return false;
+    }
   }
 }

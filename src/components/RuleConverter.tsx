@@ -10,23 +10,59 @@ import {
   Eye,
   Wifi,
   WifiOff,
-  Key
+  Key,
+  Server,
+  ServerOff
 } from 'lucide-react';
 import { RuleParser } from '../services/ruleParser';
 import { RuleStorage } from '../services/ruleStorage';
 import { AuditRule, ConversionResult } from '../types/audit';
+import { apiClient } from '../services/apiClient';
 
 export const RuleConverter: React.FC = () => {
   const [instruction, setInstruction] = useState('');
   const [result, setResult] = useState<ConversionResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [savedRules, setSavedRules] = useState<AuditRule[]>(RuleStorage.getActiveRules());
+  const [savedRules, setSavedRules] = useState<AuditRule[]>([]);
   const [showRuleDetails, setShowRuleDetails] = useState<string | null>(null);
   const [parserStatus, setParserStatus] = useState({ available: false, apiKey: false });
+  const [serverStatus, setServerStatus] = useState({ connected: false, error: null });
 
   useEffect(() => {
-    setParserStatus(RuleParser.getParserStatus());
+    checkServerConnection();
+    loadSavedRules();
+    loadParserStatus();
   }, []);
+
+  const checkServerConnection = async () => {
+    try {
+      await apiClient.healthCheck();
+      setServerStatus({ connected: true, error: null });
+    } catch (error) {
+      setServerStatus({ 
+        connected: false, 
+        error: error instanceof Error ? error.message : 'Connection failed' 
+      });
+    }
+  };
+
+  const loadSavedRules = async () => {
+    try {
+      const rules = await RuleStorage.getActiveRules();
+      setSavedRules(rules);
+    } catch (error) {
+      console.error('Failed to load saved rules:', error);
+    }
+  };
+
+  const loadParserStatus = async () => {
+    try {
+      const status = await RuleParser.getParserStatus();
+      setParserStatus(status);
+    } catch (error) {
+      console.error('Failed to load parser status:', error);
+    }
+  };
 
   const exampleInstructions = [
     "Flag any expense above $1,000 not tagged as capital expenditure.",
@@ -54,31 +90,52 @@ export const RuleConverter: React.FC = () => {
     }
   };
 
-  const handleSaveRule = () => {
+  const handleSaveRule = async () => {
     if (!result?.rule) return;
 
-    const savedRule = RuleStorage.saveRule(result.rule, instruction, 'user');
-    setSavedRules(RuleStorage.getActiveRules());
-    
-    // Clear the form
-    setInstruction('');
-    setResult(null);
+    try {
+      const savedRule = await RuleStorage.saveRule(result.rule, instruction, 'user');
+      await loadSavedRules();
+      
+      // Clear the form
+      setInstruction('');
+      setResult(null);
+    } catch (error) {
+      console.error('Failed to save rule:', error);
+    }
   };
 
-  const handleDeleteRule = (id: string) => {
-    RuleStorage.deleteRule(id);
-    setSavedRules(RuleStorage.getActiveRules());
+  const handleDeleteRule = async (id: string) => {
+    try {
+      await RuleStorage.deleteRule(id);
+      await loadSavedRules();
+    } catch (error) {
+      console.error('Failed to delete rule:', error);
+    }
   };
 
-  const handleExportRules = () => {
-    const rulesJson = RuleStorage.exportRules();
-    const blob = new Blob([rulesJson], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'audit-rules.json';
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleExportRules = async () => {
+    try {
+      const rulesJson = await RuleStorage.exportRules();
+      const blob = new Blob([rulesJson], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'audit-rules.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to export rules:', error);
+    }
+  };
+
+  const handleClearAllRules = async () => {
+    try {
+      await RuleStorage.clearAllRules();
+      await loadSavedRules();
+    } catch (error) {
+      console.error('Failed to clear rules:', error);
+    }
   };
 
   const copyToClipboard = (text: string) => {
@@ -103,8 +160,25 @@ export const RuleConverter: React.FC = () => {
           Convert natural language audit instructions into machine-executable rules using Google Gemini AI
         </p>
         
-        {/* API Status Indicator */}
+        {/* Status Indicators */}
         <div className="flex items-center justify-center space-x-4 mt-4">
+          {/* Server Status */}
+          <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm ${
+            serverStatus.connected 
+              ? 'bg-green-100 text-green-800' 
+              : 'bg-red-100 text-red-800'
+          }`}>
+            {serverStatus.connected ? (
+              <Server className="w-4 h-4" />
+            ) : (
+              <ServerOff className="w-4 h-4" />
+            )}
+            <span>
+              {serverStatus.connected ? 'Backend Connected' : 'Backend Disconnected'}
+            </span>
+          </div>
+
+          {/* API Status */}
           <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm ${
             parserStatus.available 
               ? 'bg-green-100 text-green-800' 
@@ -128,14 +202,28 @@ export const RuleConverter: React.FC = () => {
           )}
         </div>
 
-        {!parserStatus.apiKey && (
+        {!serverStatus.connected && (
+          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-left max-w-2xl mx-auto">
+            <h4 className="font-medium text-red-900 mb-2">Backend Server Not Connected</h4>
+            <p className="text-sm text-red-800 mb-2">
+              The backend server is not running. Please start it to use the AI Rule Converter.
+            </p>
+            <ol className="text-sm text-red-800 space-y-1 list-decimal list-inside">
+              <li>Open a terminal in the project directory</li>
+              <li>Run <code className="bg-red-100 px-1 rounded">npm run dev:server</code></li>
+              <li>Or run <code className="bg-red-100 px-1 rounded">npm run dev</code> to start both frontend and backend</li>
+            </ol>
+          </div>
+        )}
+
+        {!parserStatus.apiKey && serverStatus.connected && (
           <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-left max-w-2xl mx-auto">
             <h4 className="font-medium text-blue-900 mb-2">Setup Google Gemini API</h4>
             <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
               <li>Visit <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="underline">Google AI Studio</a></li>
               <li>Create a new API key</li>
-              <li>Add <code className="bg-blue-100 px-1 rounded">VITE_GEMINI_API_KEY=your_api_key</code> to your .env file</li>
-              <li>Restart the development server</li>
+              <li>Add <code className="bg-blue-100 px-1 rounded">GEMINI_API_KEY=your_api_key</code> to your server/.env file</li>
+              <li>Restart the backend server</li>
             </ol>
           </div>
         )}
@@ -153,6 +241,7 @@ export const RuleConverter: React.FC = () => {
               onChange={(e) => setInstruction(e.target.value)}
               placeholder="Enter your audit rule in plain English..."
               className="w-full h-32 px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
+              disabled={!serverStatus.connected}
             />
           </div>
 
@@ -164,7 +253,8 @@ export const RuleConverter: React.FC = () => {
                 <button
                   key={index}
                   onClick={() => setInstruction(example)}
-                  className="text-left p-3 bg-slate-50 hover:bg-slate-100 rounded-lg text-sm text-slate-600 transition-colors duration-200"
+                  disabled={!serverStatus.connected}
+                  className="text-left p-3 bg-slate-50 hover:bg-slate-100 rounded-lg text-sm text-slate-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   "{example}"
                 </button>
@@ -174,7 +264,7 @@ export const RuleConverter: React.FC = () => {
 
           <button
             onClick={handleConvert}
-            disabled={!instruction.trim() || isProcessing}
+            disabled={!instruction.trim() || isProcessing || !serverStatus.connected}
             className="w-full px-6 py-3 bg-gradient-to-r from-blue-900 to-teal-600 text-white rounded-lg font-medium hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
           >
             {isProcessing ? (
@@ -272,17 +362,16 @@ export const RuleConverter: React.FC = () => {
           <div className="flex space-x-2">
             <button
               onClick={handleExportRules}
-              className="px-4 py-2 bg-slate-600 text-white rounded-lg font-medium hover:bg-slate-700 transition-colors duration-200 flex items-center space-x-2"
+              disabled={!serverStatus.connected}
+              className="px-4 py-2 bg-slate-600 text-white rounded-lg font-medium hover:bg-slate-700 transition-colors duration-200 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Download className="w-4 h-4" />
               <span>Export</span>
             </button>
             <button
-              onClick={() => {
-                RuleStorage.clearAllRules();
-                setSavedRules([]);
-              }}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors duration-200 flex items-center space-x-2"
+              onClick={handleClearAllRules}
+              disabled={!serverStatus.connected}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors duration-200 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Trash2 className="w-4 h-4" />
               <span>Clear All</span>
@@ -325,7 +414,8 @@ export const RuleConverter: React.FC = () => {
                     </button>
                     <button
                       onClick={() => handleDeleteRule(rule.id)}
-                      className="p-2 hover:bg-red-100 rounded transition-colors duration-200"
+                      disabled={!serverStatus.connected}
+                      className="p-2 hover:bg-red-100 rounded transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Trash2 className="w-4 h-4 text-red-500" />
                     </button>
