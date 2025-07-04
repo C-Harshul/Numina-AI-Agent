@@ -26,7 +26,10 @@ export const RuleConverter: React.FC = () => {
   const [savedRules, setSavedRules] = useState<AuditRule[]>([]);
   const [showRuleDetails, setShowRuleDetails] = useState<string | null>(null);
   const [parserStatus, setParserStatus] = useState({ available: false, apiKey: false });
-  const [serverStatus, setServerStatus] = useState({ connected: false, error: null });
+  const [serverStatus, setServerStatus] = useState<{ connected: boolean; error: string | null }>({ connected: false, error: null });
+  const [realmId, setRealmId] = useState('');
+  const [accessToken, setAccessToken] = useState('');
+  const [entity, setEntity] = useState('Expense');
 
   useEffect(() => {
     checkServerConnection();
@@ -73,12 +76,10 @@ export const RuleConverter: React.FC = () => {
   ];
 
   const handleConvert = async () => {
-    if (!instruction.trim()) return;
-
+    if (!instruction.trim() || !realmId.trim() || !accessToken.trim() || !entity.trim()) return;
     setIsProcessing(true);
-    
     try {
-      const conversionResult = await RuleParser.parseInstruction(instruction);
+      const conversionResult = await RuleParser.parseInstruction(instruction, realmId, accessToken, entity);
       setResult(conversionResult);
     } catch (error) {
       setResult({
@@ -241,6 +242,46 @@ export const RuleConverter: React.FC = () => {
               onChange={(e) => setInstruction(e.target.value)}
               placeholder="Enter your audit rule in plain English..."
               className="w-full h-32 px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
+              disabled={!serverStatus.connected}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-3">
+              QuickBooks Realm ID
+            </label>
+            <input
+              type="text"
+              value={realmId}
+              onChange={e => setRealmId(e.target.value)}
+              placeholder="Enter your QuickBooks company (realm) ID"
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              disabled={!serverStatus.connected}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-3">
+              OAuth Access Token
+            </label>
+            <input
+              type="text"
+              value={accessToken}
+              onChange={e => setAccessToken(e.target.value)}
+              placeholder="Enter your QuickBooks OAuth access token"
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              disabled={!serverStatus.connected}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-3">
+              Transaction Entity Type
+            </label>
+            <input
+              type="text"
+              value={entity}
+              onChange={e => setEntity(e.target.value)}
+              placeholder="e.g. Expense, Invoice, Bill, Payment"
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
               disabled={!serverStatus.connected}
             />
           </div>

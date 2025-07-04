@@ -1,20 +1,19 @@
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+// Get current directory for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+// Load environment variables from .env file in the server directory
+dotenv.config({ path: join(__dirname, '.env') });
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 import ruleRoutes from './routes/rules.js';
 import geminiRoutes from './routes/gemini.js';
-
-// Get current directory for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Load environment variables from .env file in the server directory
-dotenv.config({ path: join(__dirname, '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 3001;

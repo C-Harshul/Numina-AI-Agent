@@ -1,0 +1,241 @@
+QuickBooks Online Accounting API Resource Model Overview
+=========================================================
+
+The QuickBooks Online Accounting API uses REST architecture, supports standard HTTP methods, and JSON for input/output. It enables apps to interact with customer-facing features in QuickBooks Online.
+
+---------------------------------------------------------
+Resource Model (Based on Diagram)
+---------------------------------------------------------
+
+Entities and Relationships:
+
+[Money-in Transactions]       [Money-out Transactions]
+- Invoice                     - Bill
+- Sales Receipt              - BillPayment
+- CreditMemo                 - Purchase
+- Estimate                   - PurchaseOrder
+- Payment                    - VendorCredit
+- RefundReceipt
+
+        ↕                          ↕
+     [Customer]               [Vendor]
+        ↕                          ↕
+      [Item (Inventory)] ↔ [Account]
+             ↑               ↑   ↑
+        JournalEntry      Transfer
+
+---------------------------------------------------------
+API Resources Overview
+---------------------------------------------------------
+
+List Entities (Name Lists):
+- Account
+- Customer
+- Vendor
+- Employee
+
+Transaction Entities:
+- Invoice, Bill, Payment, BillPayment, Refund
+
+Reports:
+- ProfitandLoss, GeneralLedger, CashFlow
+
+Inventory:
+- Item (tracks products/services, inventory hierarchies, bundles)
+
+JournalEntry:
+- Used for corrections, adjustments, etc.
+
+---------------------------------------------------------
+Basic Operations Supported
+---------------------------------------------------------
+
+- CRUD (Create, Read, Update, Delete)
+- Query operations (SQL-like)
+- Batch operations
+- Change data capture (for sync)
+- Sparse Updates (update only specified fields)
+- Full Updates (updates all fields; omitted fields are nulled)
+- Soft Deletes (deactivate list entities)
+- Hard Deletes (permanently remove transaction entities)
+
+---------------------------------------------------------
+Example POST Request (Create Invoice)
+---------------------------------------------------------
+
+POST /v3/company/12345678/invoice HTTP/1.1
+Host: quickbooks.api.intuit.com
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+   "Line": [
+      {
+         "Amount": 100.00,
+         "DetailType": "SalesItemLineDetail",
+         "SalesItemLineDetail": {
+            "ItemRef": {
+               "value": "1",
+               "name": "Services"
+            }
+         }
+      }
+   ],
+   "CustomerRef": {
+      "value": "1"
+   }
+}
+
+---------------------------------------------------------
+Server Response Headers (Sample)
+---------------------------------------------------------
+
+Cache-Control: max-age=0, no-cache, no-store
+Content-Type: application/json;charset=UTF-8
+Date: Thu, 07 Jan 2016 17:19:22 GMT
+QBO-Version: 1512.462
+Transfer-Encoding: chunked
+
+---------------------------------------------------------
+Timestamps Format
+---------------------------------------------------------
+
+Example: 2025-02-24T10:33:39-07:00
+Format: YYYY-MM-DDTHH:MM:SS+UTC-offset
+
+---------------------------------------------------------
+API Rate Limits
+---------------------------------------------------------
+
+Sandbox:
+- 500 requests/minute per realm
+- 40 emails/day per realm
+- 30 entities max per batch
+- Throttled at 40 requests/minute
+
+Production:
+- 500 requests/minute per realm
+- 10 req/sec per app
+- 800 requests/minute (combined)
+- 1000 entities max per query
+- 10,000 line items or links/transaction (except JournalEntry)
+
+---------------------------------------------------------
+Encoding
+---------------------------------------------------------
+
+- US: ISO-8859-1
+- Non-US: UTF-8
+
+---------------------------------------------------------
+Base URL & URI Structure
+---------------------------------------------------------
+
+Base URL: https://quickbooks.api.intuit.com
+
+URI Examples:
+- Create/Update: POST /v3/company/{realmId}/{resourceName}
+- Read single: GET /v3/company/{realmId}/{resourceName}/{entityID}
+- Read multiple: GET /v3/company/{realmId}/query?query={selectStmt}
+- Delete: POST /v3/company/{realmId}/{resourceName}?operation=delete
+
+---------------------------------------------------------
+Developer Notes
+---------------------------------------------------------
+
+- Use sparse updates to prevent accidental overwrites.
+- Use soft deletes for list-type entities.
+- Use hard deletes only when absolutely necessary.
+- Refer to the API Explorer for full schema and minor version access.
+
+QuickBooks Online Accounting API - Basic IDs and Field Definitions
+==================================================================
+
+COMMON FIELDS
+-------------
+
+appID (App ID):
+- Unique identifier for an app created on the Intuit Developer Portal.
+- Found on the Developer Dashboard.
+
+clientID (Client ID):
+- Publicly identifies an app using OAuth 2.0.
+- Used by clients connecting to apps.
+
+clientSecret (Client Secret):
+- Private string identifying an app using OAuth 2.0.
+- Known only to the app, developer, and Intuit.
+
+realmID (Company ID):
+- Identifies an individual QuickBooks Online company.
+- Often called “company ID.”
+- Appears in every API request URI.
+
+Permalink:
+- The URL for your app’s QuickBooks App Store page.
+- Example: https://apps.intuit.com/AccountingApp
+
+-----------------------------
+COMMON IDs AND IDENTIFIERS
+-----------------------------
+
+Realm ID
+- Assigned when a QuickBooks Online company file is created.
+- Used in all API requests.
+
+Example:
+    baseURL/company/1234/account
+    → Realm ID: 1234
+
+Ways to retrieve Realm ID:
+- From the ID token when using OpenID Connect.
+- From the `realmId` parameter in the OAuth 2.0 authorization redirect URL.
+
+Entity ID
+- Identifies individual instances of an API entity (account, invoice, etc).
+- Used in URLs for read operations.
+
+Example:
+    baseURL/company/1234/customer/2123
+    → Entity ID: 2123 (Customer entity)
+
+Request ID
+- Identifies a specific HTTP request from the app to QuickBooks servers.
+- Ensures **idempotency** (i.e., avoids duplicate processing).
+
+Usage:
+- Strongly recommended for create/update/delete operations.
+- Specify as a query parameter: `?requestid=your_unique_id`
+
+Best practices:
+- Must be unique per realm ID.
+- Max 50 characters (standard operations).
+- Max 36 characters (batch operations).
+- Use libraries like `java.util.UUID` or `.NET System.GUID` for generation.
+
+Important Notes:
+- If a request is repeated due to timeout/loss of response and the same `requestid` is used, the server returns the same original response.
+- If `requestid` is not used, duplicate transactions (e.g., invoices) may be created.
+
+Example Scenario:
+----------------------------------------------------
+1. App sends a request to create an invoice with requestid=4957.
+2. Server processes the request and sends a response.
+3. App loses connection and doesn’t receive the response.
+4. App resends the same request with requestid=4957.
+5. Server detects the duplicate using requestid and returns the original response.
+6. App receives a valid response without creating duplicates.
+----------------------------------------------------
+
+Resource Name
+- Name of the API entity such as:
+    * account
+    * customer
+    * payment
+    * invoice
+- Used in API paths: `/company/{realmId}/{resourceName}`
+
+Example:
+    GET /v3/company/1234/invoice/5678
+    → Resource: invoice

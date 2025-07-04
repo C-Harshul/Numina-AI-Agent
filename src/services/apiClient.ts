@@ -109,10 +109,10 @@ class ApiClient {
     return this.request('/gemini/status');
   }
 
-  async parseInstruction(instruction: string) {
+  async parseInstruction(instruction: string, realmId: string, accessToken: string, entity: string) {
     return this.request('/gemini/parse', {
       method: 'POST',
-      body: JSON.stringify({ instruction }),
+      body: JSON.stringify({ instruction, realmId, accessToken, entity }),
     });
   }
 }

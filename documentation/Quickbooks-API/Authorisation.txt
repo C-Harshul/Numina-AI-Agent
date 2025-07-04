@@ -1,0 +1,130 @@
+===========================================
+Intuit OAuth 2.0 Implementation Guide (.txt)
+===========================================
+
+🔐 PRACTICE AUTHORIZATION USING OAUTH PLAYGROUND
+
+-------------------------------------------
+STEP 1: SET UP YOUR APP
+-------------------------------------------
+- Sign in: https://developer.intuit.com
+- Create a new app.
+- Add your redirect URIs (case-sensitive).
+- Note your Client ID and Client Secret under “Keys & OAuth”.
+
+-------------------------------------------
+STEP 2: USE THE OAUTH 2.0 PLAYGROUND
+-------------------------------------------
+- Visit: https://developer.intuit.com/app/developer/playground
+- Select your sandbox company.
+- Choose required scopes (e.g., com.intuit.quickbooks.accounting).
+- Click "Get Authorization Code" and connect your app.
+- Click "Get Tokens" to receive:
+  - access_token
+  - refresh_token
+
+-------------------------------------------
+STEP 3: PRACTICE API CALLS
+-------------------------------------------
+- In OAuth Playground, go to "Make API Calls".
+- Select API type and call a GET request.
+
+Sample API Calls:
+- Get Company Info
+  Scope: com.intuit.quickbooks.accounting
+- Submit Charge
+  Scope: com.intuit.quickbooks.payments
+- Get User Info
+  Scope: openid profile email
+
+-------------------------------------------
+END-TO-END OAUTH FLOW
+-------------------------------------------
+
+(1) CREATE AUTHORIZATION REQUEST (Open in Browser)
+Example URL:
+https://appcenter.intuit.com/connect/oauth2?
+  client_id=YOUR_CLIENT_ID&
+  response_type=code&
+  scope=com.intuit.quickbooks.accounting&
+  redirect_uri=https://yourapp.com/oauth-redirect&
+  state=random_state_value
+
+(2) EXCHANGE AUTHORIZATION CODE FOR TOKENS
+POST https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer
+
+Headers:
+  Authorization: Basic base64(client_id:client_secret)
+  Content-Type: application/x-www-form-urlencoded
+
+Body:
+  grant_type=authorization_code
+  code=AUTH_CODE
+  redirect_uri=https://yourapp.com/oauth-redirect
+
+Example JSON Response:
+{
+  "access_token": "xxx",
+  "refresh_token": "xxx",
+  "expires_in": 3600,
+  "x_refresh_token_expires_in": 15552000,
+  "token_type": "bearer"
+}
+
+(3) MAKE API CALLS
+GET https://quickbooks.api.intuit.com/v3/company/{realmId}/companyinfo/{realmId}
+
+Header:
+  Authorization: Bearer ACCESS_TOKEN
+
+(4) REFRESH ACCESS TOKEN
+POST https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer
+
+Headers:
+  Authorization: Basic base64(client_id:client_secret)
+  Content-Type: application/x-www-form-urlencoded
+
+Body:
+  grant_type=refresh_token
+  refresh_token=YOUR_REFRESH_TOKEN
+
+(5) REVOKE TOKEN (USER DISCONNECT)
+POST https://developer.api.intuit.com/v2/oauth2/tokens/revoke
+
+Headers:
+  Authorization: Basic base64(client_id:client_secret)
+  Content-Type: application/json
+
+Body:
+{
+  "token": "ACCESS_OR_REFRESH_TOKEN"
+}
+
+Response:
+- 200 OK on success
+- 400 on error
+
+-------------------------------------------
+SDKs AVAILABLE
+-------------------------------------------
+- .NET:    github.com/intuit/QuickBooks-V3-DotNET-SDK
+- Java:    github.com/intuit/QuickBooks-V3-Java-SDK
+- PHP:     github.com/intuit/QuickBooks-V3-PHP-SDK
+- Node.js: github.com/intuit/oauth-jsclient
+- Python:  github.com/intuit/oauth-pythonclient
+- Ruby:    github.com/intuit/oauth-rubyclient
+
+-------------------------------------------
+DISCOVERY DOCUMENTS
+-------------------------------------------
+Sandbox:   https://developer.intuit.com/.well-known/openid_sandbox_configuration/
+Production: https://developer.intuit.com/.well-known/openid_configuration/
+
+-------------------------------------------
+TIPS
+-------------------------------------------
+- Tokens expire after 1 hour.
+- Refresh tokens expire in 100 days.
+- Always use the latest refresh token.
+- Store tokens securely.
+- Use state param to prevent CSRF.

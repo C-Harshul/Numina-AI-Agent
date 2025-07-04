@@ -2,7 +2,7 @@ import { ConversionResult } from '../types/audit';
 import { apiClient } from './apiClient';
 
 export class RuleParser {
-  static async parseInstruction(instruction: string): Promise<ConversionResult> {
+  static async parseInstruction(instruction: string, realmId: string, accessToken: string, entity: string): Promise<ConversionResult> {
     if (!instruction.trim()) {
       return {
         success: false,
@@ -12,7 +12,7 @@ export class RuleParser {
     }
 
     try {
-      const response = await apiClient.parseInstruction(instruction);
+      const response = await apiClient.parseInstruction(instruction, realmId, accessToken, entity) as ConversionResult;
       return response;
     } catch (error) {
       console.error('Rule parsing error:', error);
@@ -24,13 +24,13 @@ export class RuleParser {
           'Verify the backend server is running',
           'Try simplifying your instruction'
         ]
-      };
+      } as ConversionResult;
     }
   }
 
   static async getParserStatus() {
     try {
-      const response = await apiClient.getGeminiStatus();
+      const response = await apiClient.getGeminiStatus() as { data: any };
       return response.data;
     } catch (error) {
       console.error('Failed to get parser status:', error);

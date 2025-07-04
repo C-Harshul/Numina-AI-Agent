@@ -1,5 +1,12 @@
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+dotenv.config({ path: join(__dirname, '../.env') });
 import express from 'express';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getQuickBooksFields } from '../services/quickbooksSchemaExtractor.js';
 
 const router = express.Router();
 
@@ -23,7 +30,7 @@ const initializeGemini = () => {
 
   try {
     genAI = new GoogleGenerativeAI(apiKey);
-    model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
     console.log('✅ Gemini AI initialized successfully');
     return true;
   } catch (error) {
@@ -44,7 +51,7 @@ router.get('/status', (req, res) => {
     data: {
       available: model !== null,
       apiKey: !!apiKey,
-      model: model ? 'gemini-pro' : null,
+      model: model ? 'gemini-2.5-flash' : null,
       debug: {
         gemini_api_key_set: !!process.env.GEMINI_API_KEY,
         vite_gemini_api_key_set: !!process.env.VITE_GEMINI_API_KEY,
@@ -54,11 +61,40 @@ router.get('/status', (req, res) => {
   });
 });
 
+// Helper to build a prompt with valid fields
+function buildPromptWithFields(instruction, validFields) {
+  return `
+You are an expert audit rule parser. Convert the following natural language audit instruction into a structured JSON rule.
+
+INSTRUCTION: "${instruction}"
+
+IMPORTANT: Only use the following field names in your output (these are the only valid fields for this QuickBooks workspace and entity):
+${validFields.map(f => `- ${f}`).join('\n')}
+
+Please analyze the instruction and return a JSON object with the following structure:
+{
+  "rule_type": "string",
+  "conditions": [
+    {
+      "field": "string (must be one of the valid fields above)",
+      "operator": "string (gt, lt, eq, ne, contains, not_contains, in, not_in)",
+      "value": "any",
+      "logical_operator": "string (AND, OR) - optional"
+    }
+  ],
+  "action": "string (flag, review, reject, approve)",
+  "reason": "string",
+  "confidence_score": "number (0.0 to 1.0)"
+}
+
+Return ONLY the JSON object, no additional text or explanation.
+`;
+}
+
 // Parse instruction using Gemini AI
 router.post('/parse', async (req, res) => {
   try {
-    const { instruction } = req.body;
-    
+    const { instruction, realmId, accessToken, entity } = req.body;
     if (!instruction || !instruction.trim()) {
       return res.status(400).json({
         success: false,
@@ -66,22 +102,49 @@ router.post('/parse', async (req, res) => {
         suggestions: ['Please provide a clear audit instruction']
       });
     }
-
-    // If Gemini is not available, use fallback parsing
+    if (!realmId || !accessToken || !entity) {
+      return res.status(400).json({
+        success: false,
+        error: 'realmId, accessToken, and entity are required to validate rule fields against QuickBooks schema.'
+      });
+    }
+    // 1. Get valid QuickBooks fields for this entity
+    let validFields;
+    try {
+      validFields = await getQuickBooksFields({ realmId, accessToken, entity });
+    } catch (err) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to fetch QuickBooks schema: ' + err.message
+      });
+    }
+    // 2. If Gemini is not available, use fallback parsing
     if (!model) {
       console.log('🔄 Using fallback parsing (Gemini not available)');
       const fallbackResult = fallbackParsing(instruction);
       return res.json(fallbackResult);
     }
-
+    // 3. Build a prompt that includes the valid fields
+    const prompt = buildPromptWithFields(instruction, validFields);
     try {
       console.log('🤖 Processing with Gemini AI:', instruction.substring(0, 50) + '...');
-      const prompt = buildPrompt(instruction);
       const result = await model.generateContent(prompt);
       const response = await result.response;
       const text = response.text();
-
       const parsedResult = parseGeminiResponse(text, instruction);
+      // 4. (Optional) Validate again, but the AI should now only use valid fields
+      if (parsedResult.success && parsedResult.rule && parsedResult.rule.conditions) {
+        const invalidFields = parsedResult.rule.conditions
+          .map(c => c.field)
+          .filter(f => !validFields.includes(f));
+        if (invalidFields.length > 0) {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid fields in rule: ' + invalidFields.join(', '),
+            validFields
+          });
+        }
+      }
       console.log('✅ Gemini parsing completed');
       res.json(parsedResult);
     } catch (error) {
@@ -103,48 +166,6 @@ router.post('/parse', async (req, res) => {
     });
   }
 });
-
-// Build prompt for Gemini
-const buildPrompt = (instruction) => {
-  return `
-You are an expert audit rule parser. Convert the following natural language audit instruction into a structured JSON rule.
-
-INSTRUCTION: "${instruction}"
-
-Please analyze the instruction and return a JSON object with the following structure:
-{
-  "rule_type": "string (one of: expense_amount_threshold, vendor_frequency, category_amount_threshold, duplicate_detection, time_based, compliance_check)",
-  "conditions": [
-    {
-      "field": "string (e.g., amount, vendor, category, time, etc.)",
-      "operator": "string (gt, lt, eq, ne, contains, not_contains, in, not_in)",
-      "value": "any (the threshold value, category name, etc.)",
-      "logical_operator": "string (AND, OR) - optional"
-    }
-  ],
-  "action": "string (flag, review, reject, approve)",
-  "reason": "string (human-readable explanation of what the rule does)",
-  "confidence_score": "number (0.0 to 1.0 indicating confidence in the parsing)"
-}
-
-IMPORTANT RULES:
-1. Extract specific numeric thresholds (amounts, frequencies, percentages)
-2. Identify the main action (flag, review, reject, approve)
-3. Determine the rule type based on what's being checked
-4. Create logical conditions that can be evaluated programmatically
-5. Provide a confidence score based on how clear the instruction is
-6. If the instruction mentions "not" or exclusions, use appropriate operators
-7. For time-based rules, extract specific times or time ranges
-8. For duplicate detection, focus on matching criteria (amount, vendor, date, etc.)
-
-EXAMPLES:
-- "Flag any expense above $1,000 not tagged as capital expenditure" → expense_amount_threshold with amount > 1000 AND category not_contains "capital"
-- "If a vendor appears more than twice in one day, flag for review" → vendor_frequency with frequency > 2 AND timeframe = "day"
-- "Review any expense after 10 PM" → time_based with time > "22:00"
-
-Return ONLY the JSON object, no additional text or explanation.
-`;
-};
 
 // Parse Gemini response
 const parseGeminiResponse = (response, originalInstruction) => {
