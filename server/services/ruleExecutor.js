@@ -180,12 +180,60 @@ export async function executeRule(rule, { realmId, accessToken, entity }) {
         flaggedTransactions.push({
           id: transaction.Id,
           transaction_data: transaction,
-          matched_conditions: rule.conditions.map(condition => ({
-            field: condition.field,
-            operator: condition.operator,
-            value: condition.value,
-            actual_value: getNestedValue(transaction, condition.field)
-          })),
+          matched_conditions: rule.conditions.map(condition => {
+            const actualValue = getNestedValue(transaction, condition.field);
+            let flaggedFieldData = null;
+            
+            // Get the complete field data that was flagged
+            if (isLineField(condition.field)) {
+              // For Line fields, find the specific line item that matched
+              const lines = transaction.Line;
+              const lineFieldPath = condition.field.substring(5);
+              const matchingLineIndex = lines.findIndex(line => {
+                const fieldValue = getNestedValue(line, lineFieldPath);
+                return compare(fieldValue, condition.operator, condition.value);
+              });
+              
+              if (matchingLineIndex !== -1) {
+                flaggedFieldData = {
+                  line_index: matchingLineIndex,
+                  line_data: lines[matchingLineIndex],
+                  field_path: condition.field,
+                  field_value: actualValue
+                };
+              }
+            } else {
+              // For regular fields, get the parent object containing the field
+              const fieldParts = condition.field.split('.');
+              const parentPath = fieldParts.slice(0, -1).join('.');
+              const fieldName = fieldParts[fieldParts.length - 1];
+              
+              if (parentPath) {
+                const parentObject = getNestedValue(transaction, parentPath);
+                flaggedFieldData = {
+                  parent_path: parentPath,
+                  parent_object: parentObject,
+                  field_name: fieldName,
+                  field_value: actualValue
+                };
+              } else {
+                // Top-level field
+                flaggedFieldData = {
+                  field_name: condition.field,
+                  field_value: actualValue,
+                  parent_object: transaction
+                };
+              }
+            }
+            
+            return {
+              field: condition.field,
+              operator: condition.operator,
+              value: condition.value,
+              actual_value: actualValue,
+              flagged_field_data: flaggedFieldData
+            };
+          }),
           action: rule.action,
           reason: rule.reason,
           flagged_at: new Date().toISOString()

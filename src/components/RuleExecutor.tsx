@@ -28,6 +28,17 @@ interface ExecutionResult {
       operator: string;
       value: string | number | boolean;
       actual_value: string | number | boolean;
+      flagged_field_data?: {
+        // For Line fields
+        line_index?: number;
+        line_data?: Record<string, unknown>;
+        field_path?: string;
+        field_value?: any;
+        // For regular fields
+        parent_path?: string;
+        parent_object?: Record<string, unknown>;
+        field_name?: string;
+      };
     }>;
     action: string;
     reason: string;
@@ -525,12 +536,63 @@ export const RuleExecutor: React.FC = () => {
                               <div className="space-y-2">
                                 <h4 className="text-sm font-medium text-red-800">Matched Conditions:</h4>
                                 {transaction.matched_conditions.map((condition, condIndex) => (
-                                  <div key={condIndex} className="text-sm text-red-700 ml-4">
-                                    <span className="font-medium">{condition.field}</span>
-                                    <span className="mx-2">{condition.operator}</span>
-                                    <span className="bg-red-100 px-2 py-1 rounded">{condition.value}</span>
-                                    <span className="mx-2">→</span>
-                                    <span className="bg-red-200 px-2 py-1 rounded">{String(condition.actual_value)}</span>
+                                  <div key={condIndex} className="text-sm text-red-700 ml-4 space-y-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium">{condition.field}</span>
+                                      <span className="mx-2">{condition.operator}</span>
+                                      <span className="bg-red-100 px-2 py-1 rounded">{String(condition.value)}</span>
+                                      <span className="mx-2">→</span>
+                                      <span className="bg-red-200 px-2 py-1 rounded">{String(condition.actual_value)}</span>
+                                    </div>
+                                    
+                                    {/* Enhanced Field Data Display */}
+                                    {condition.flagged_field_data && (
+                                      <div className="ml-4 bg-red-50 border border-red-200 rounded p-3">
+                                        <h5 className="text-xs font-medium text-red-800 mb-2">Complete Flagged Field Data:</h5>
+                                        
+                                        {condition.flagged_field_data.line_index !== undefined ? (
+                                          // Line field data
+                                          <div className="space-y-2">
+                                            <div className="text-xs text-red-700">
+                                              <span className="font-medium">Line Index:</span> {condition.flagged_field_data.line_index}
+                                            </div>
+                                            <div className="text-xs text-red-700">
+                                              <span className="font-medium">Field Path:</span> {condition.flagged_field_data.field_path}
+                                            </div>
+                                            <div className="text-xs text-red-700">
+                                              <span className="font-medium">Field Value:</span> {String(condition.flagged_field_data.field_value)}
+                                            </div>
+                                            <div className="text-xs text-red-700">
+                                              <span className="font-medium">Complete Line Data:</span>
+                                            </div>
+                                            <pre className="text-xs bg-red-100 p-2 rounded overflow-auto max-h-32">
+                                              {JSON.stringify(condition.flagged_field_data.line_data, null, 2)}
+                                            </pre>
+                                          </div>
+                                        ) : (
+                                          // Regular field data
+                                          <div className="space-y-2">
+                                            {condition.flagged_field_data.parent_path && (
+                                              <div className="text-xs text-red-700">
+                                                <span className="font-medium">Parent Path:</span> {condition.flagged_field_data.parent_path}
+                                              </div>
+                                            )}
+                                            <div className="text-xs text-red-700">
+                                              <span className="font-medium">Field Name:</span> {condition.flagged_field_data.field_name}
+                                            </div>
+                                            <div className="text-xs text-red-700">
+                                              <span className="font-medium">Field Value:</span> {String(condition.flagged_field_data.field_value)}
+                                            </div>
+                                            <div className="text-xs text-red-700">
+                                              <span className="font-medium">Parent Object:</span>
+                                            </div>
+                                            <pre className="text-xs bg-red-100 p-2 rounded overflow-auto max-h-32">
+                                              {JSON.stringify(condition.flagged_field_data.parent_object, null, 2)}
+                                            </pre>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                 ))}
                               </div>
