@@ -13,12 +13,14 @@ import {
   Brain,
   Target,
   Settings,
-  Home
+  Home,
+  Play
 } from 'lucide-react';
 import { RuleConverter } from './components/RuleConverter';
+import { RuleExecutor } from './components/RuleExecutor';
 
 function App() {
-  const [currentView, setCurrentView] = useState<'home' | 'converter'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'converter' | 'executor'>('home');
   const [email, setEmail] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
 
@@ -31,35 +33,68 @@ function App() {
     }
   };
 
+  // Navigation component for converter and executor views
+  const Navigation = ({ currentView }: { currentView: 'converter' | 'executor' }) => (
+    <nav className="px-6 py-4 bg-white/80 backdrop-blur-sm border-b border-slate-200">
+      <div className="max-w-7xl mx-auto flex justify-between items-center">
+        <div className="flex items-center space-x-2">
+          <div className="w-8 h-8 bg-gradient-to-br from-blue-900 to-teal-600 rounded-lg flex items-center justify-center">
+            <Brain className="w-5 h-5 text-white" />
+          </div>
+          <span className="text-2xl font-bold text-slate-800">Numina</span>
+        </div>
+        <div className="flex items-center space-x-4">
+          <button
+            onClick={() => setCurrentView('home')}
+            className="flex items-center space-x-2 px-4 py-2 text-slate-600 hover:text-blue-900 transition-colors duration-200"
+          >
+            <Home className="w-4 h-4" />
+            <span>Home</span>
+          </button>
+          <button
+            onClick={() => setCurrentView('converter')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+              currentView === 'converter'
+                ? 'bg-gradient-to-r from-blue-900 to-teal-600 text-white'
+                : 'text-slate-600 hover:text-blue-900'
+            }`}
+          >
+            <Settings className="w-4 h-4" />
+            <span>Rule Creator</span>
+          </button>
+          <button
+            onClick={() => setCurrentView('executor')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+              currentView === 'executor'
+                ? 'bg-gradient-to-r from-blue-900 to-teal-600 text-white'
+                : 'text-slate-600 hover:text-blue-900'
+            }`}
+          >
+            <Play className="w-4 h-4" />
+            <span>Rule Executor</span>
+          </button>
+        </div>
+      </div>
+    </nav>
+  );
+
   if (currentView === 'converter') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-        {/* Navigation */}
-        <nav className="px-6 py-4 bg-white/80 backdrop-blur-sm border-b border-slate-200">
-          <div className="max-w-7xl mx-auto flex justify-between items-center">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-900 to-teal-600 rounded-lg flex items-center justify-center">
-                <Brain className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-2xl font-bold text-slate-800">Numina</span>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => setCurrentView('home')}
-                className="flex items-center space-x-2 px-4 py-2 text-slate-600 hover:text-blue-900 transition-colors duration-200"
-              >
-                <Home className="w-4 h-4" />
-                <span>Home</span>
-              </button>
-              <div className="px-4 py-2 bg-gradient-to-r from-blue-900 to-teal-600 text-white rounded-lg text-sm font-medium">
-                AI Agent Demo
-              </div>
-            </div>
-          </div>
-        </nav>
-
+        <Navigation currentView="converter" />
         <div className="py-8">
           <RuleConverter />
+        </div>
+      </div>
+    );
+  }
+
+  if (currentView === 'executor') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+        <Navigation currentView="executor" />
+        <div className="py-8">
+          <RuleExecutor />
         </div>
       </div>
     );
@@ -81,13 +116,22 @@ function App() {
             <div className="hidden md:flex items-center space-x-8">
               <a href="#features" className="text-slate-600 hover:text-blue-900 transition-colors duration-200">Features</a>
               <a href="#about" className="text-slate-600 hover:text-blue-900 transition-colors duration-200">About</a>
-              <button
-                onClick={() => setCurrentView('converter')}
-                className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-900 to-teal-600 text-white rounded-lg text-sm font-medium hover:shadow-lg transition-all duration-200"
-              >
-                <Settings className="w-4 h-4" />
-                <span>Try AI Agent</span>
-              </button>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setCurrentView('converter')}
+                  className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-900 to-teal-600 text-white rounded-lg text-sm font-medium hover:shadow-lg transition-all duration-200"
+                >
+                  <Settings className="w-4 h-4" />
+                  <span>Rule Creator</span>
+                </button>
+                <button
+                  onClick={() => setCurrentView('executor')}
+                  className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-lg text-sm font-medium hover:shadow-lg transition-all duration-200"
+                >
+                  <Play className="w-4 h-4" />
+                  <span>Rule Executor</span>
+                </button>
+              </div>
             </div>
           </div>
         </nav>
@@ -96,7 +140,7 @@ function App() {
           <div className="max-w-4xl mx-auto text-center">
             <div className="inline-flex items-center px-4 py-2 bg-teal-100 text-teal-800 rounded-full text-sm font-medium mb-8 animate-pulse">
               <Zap className="w-4 h-4 mr-2" />
-              Coming Soon - AI Agent Demo Available
+              AI Agent Demo Available - Try Both Tools
             </div>
             
             <h1 className="text-5xl md:text-7xl font-bold text-slate-800 mb-6 leading-tight">
@@ -133,13 +177,22 @@ function App() {
               </form>
             </div>
 
-            <button
-              onClick={() => setCurrentView('converter')}
-              className="inline-flex items-center space-x-2 px-6 py-3 bg-white text-slate-800 rounded-lg font-medium hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 border border-slate-200"
-            >
-              <Brain className="w-4 h-4" />
-              <span>Try AI Agent Demo</span>
-            </button>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button
+                onClick={() => setCurrentView('converter')}
+                className="inline-flex items-center space-x-2 px-6 py-3 bg-white text-slate-800 rounded-lg font-medium hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 border border-slate-200"
+              >
+                <Brain className="w-4 h-4" />
+                <span>Create Rules</span>
+              </button>
+              <button
+                onClick={() => setCurrentView('executor')}
+                className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-lg font-medium hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200"
+              >
+                <Play className="w-4 h-4" />
+                <span>Execute Rules</span>
+              </button>
+            </div>
 
             {isSubmitted && (
               <div className="flex items-center justify-center space-x-2 text-green-600 animate-fade-in mt-4">

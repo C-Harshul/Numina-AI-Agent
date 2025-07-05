@@ -6,6 +6,7 @@ const __dirname = dirname(__filename);
 dotenv.config({ path: join(__dirname, '../.env') });
 import express from 'express';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import fetch from 'node-fetch';
 import { getQuickBooksFields } from '../services/quickbooksSchemaExtractor.js';
 
 const router = express.Router();
@@ -61,22 +62,26 @@ router.get('/status', (req, res) => {
   });
 });
 
-// Helper to build a prompt with valid fields
-function buildPromptWithFields(instruction, validFields) {
+// Helper to build a prompt with complete QuickBooks data context
+function buildPromptWithCompleteData(instruction, quickbooksData, entity) {
   return `
 You are an expert audit rule parser. Convert the following natural language audit instruction into a structured JSON rule.
 
 INSTRUCTION: "${instruction}"
 
-IMPORTANT: Only use the following field names in your output (these are the only valid fields for this QuickBooks workspace and entity):
-${validFields.map(f => `- ${f}`).join('\n')}
+QUICKBOOKS ENTITY: ${entity}
 
-Please analyze the instruction and return a JSON object with the following structure:
+COMPLETE QUICKBOOKS DATA CONTEXT:
+The following is the complete response from QuickBooks API for this entity. Use this to understand the data structure, field names, and typical values:
+
+${JSON.stringify(quickbooksData, null, 2)}
+
+Based on this complete data context, analyze the instruction and return a JSON object with the following structure:
 {
   "rule_type": "string",
   "conditions": [
     {
-      "field": "string (must be one of the valid fields above)",
+      "field": "string (use exact field names from the data above)",
       "operator": "string (gt, lt, eq, ne, contains, not_contains, in, not_in)",
       "value": "any",
       "logical_operator": "string (AND, OR) - optional"
@@ -86,6 +91,11 @@ Please analyze the instruction and return a JSON object with the following struc
   "reason": "string",
   "confidence_score": "number (0.0 to 1.0)"
 }
+
+IMPORTANT: 
+- Use exact field names from the QuickBooks data structure above
+- Consider the actual data values when determining appropriate conditions
+- Make sure your rule will work with the real data format shown
 
 Return ONLY the JSON object, no additional text or explanation.
 `;
@@ -105,46 +115,55 @@ router.post('/parse', async (req, res) => {
     if (!realmId || !accessToken || !entity) {
       return res.status(400).json({
         success: false,
-        error: 'realmId, accessToken, and entity are required to validate rule fields against QuickBooks schema.'
+        error: 'realmId, accessToken, and entity are required to fetch QuickBooks data for context.'
       });
     }
-    // 1. Get valid QuickBooks fields for this entity
-    let validFields;
+    
+    // 1. Fetch complete QuickBooks data for this entity
+    let quickbooksData;
     try {
-      validFields = await getQuickBooksFields({ realmId, accessToken, entity });
+      const url = `https://sandbox-quickbooks.api.intuit.com/v3/company/${realmId}/query?query=SELECT * FROM ${entity}`;
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`QuickBooks API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      quickbooksData = data.QueryResponse && data.QueryResponse[entity];
+      
+      if (!quickbooksData || !quickbooksData.length) {
+        throw new Error(`No records found for entity: ${entity}`);
+      }
     } catch (err) {
       return res.status(500).json({
         success: false,
-        error: 'Failed to fetch QuickBooks schema: ' + err.message
+        error: 'Failed to fetch QuickBooks data: ' + err.message
       });
     }
+    
     // 2. If Gemini is not available, use fallback parsing
     if (!model) {
       console.log('🔄 Using fallback parsing (Gemini not available)');
       const fallbackResult = fallbackParsing(instruction);
       return res.json(fallbackResult);
     }
-    // 3. Build a prompt that includes the valid fields
-    const prompt = buildPromptWithFields(instruction, validFields);
+    
+    // 3. Build a prompt that includes the complete QuickBooks data
+    const prompt = buildPromptWithCompleteData(instruction, quickbooksData, entity);
     try {
       console.log('🤖 Processing with Gemini AI:', instruction.substring(0, 50) + '...');
       const result = await model.generateContent(prompt);
       const response = await result.response;
       const text = response.text();
       const parsedResult = parseGeminiResponse(text, instruction);
-      // 4. (Optional) Validate again, but the AI should now only use valid fields
-      if (parsedResult.success && parsedResult.rule && parsedResult.rule.conditions) {
-        const invalidFields = parsedResult.rule.conditions
-          .map(c => c.field)
-          .filter(f => !validFields.includes(f));
-        if (invalidFields.length > 0) {
-          return res.status(400).json({
-            success: false,
-            error: 'Invalid fields in rule: ' + invalidFields.join(', '),
-            validFields
-          });
-        }
-      }
+      
       console.log('✅ Gemini parsing completed');
       res.json(parsedResult);
     } catch (error) {

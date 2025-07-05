@@ -115,6 +115,34 @@ class ApiClient {
       body: JSON.stringify({ instruction, realmId, accessToken, entity }),
     });
   }
+
+  // Execution endpoints
+  async executeRule(rule: any, realmId: string, accessToken: string, entity: string) {
+    return this.request('/execution/rule', {
+      method: 'POST',
+      body: JSON.stringify({ rule, realmId, accessToken, entity }),
+    });
+  }
+
+  async executeRules(rules: any[], realmId: string, accessToken: string, entity: string) {
+    return this.request('/execution/rules', {
+      method: 'POST',
+      body: JSON.stringify({ rules, realmId, accessToken, entity }),
+    });
+  }
+
+  async executeAllActiveRules(rules: any[], realmId: string, accessToken: string, entity: string) {
+    return this.request('/execution/all-active', {
+      method: 'POST',
+      body: JSON.stringify({ rules, realmId, accessToken, entity }),
+    });
+  }
+
+  // Get complete QuickBooks data context for analysis
+  async getDataContext(realmId: string, accessToken: string, entity: string) {
+    const queryParams = new URLSearchParams({ realmId, accessToken, entity });
+    return this.request(`/execution/data-context?${queryParams}`);
+  }
 }
 
 export const apiClient = new ApiClient();

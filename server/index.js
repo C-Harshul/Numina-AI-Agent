@@ -14,6 +14,7 @@ import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import ruleRoutes from './routes/rules.js';
 import geminiRoutes from './routes/gemini.js';
+import executionRoutes from './routes/execution.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -76,6 +77,7 @@ app.get('/api/health', (req, res) => {
 // API routes
 app.use('/api/rules', ruleRoutes);
 app.use('/api/gemini', geminiRoutes);
+app.use('/api/execution', executionRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
