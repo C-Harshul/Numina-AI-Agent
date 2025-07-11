@@ -68,9 +68,9 @@ export const RuleConverter: React.FC = () => {
   };
 
   const exampleInstructions = [
-    "Flag any expense above $1,000 not tagged as capital expenditure.",
-    "If a vendor appears more than twice in one day, flag for review.",
-    "If a transaction is in Meals category but over $500, flag it.",
+    "Flag all purchases done using cash and which are not checking",
+    "Flag any bill where the expense account is labeled 'Miscellaneous' or something ambigous and the total amount exceeds $500.",
+    "Flag all transactions done using Visa card",
     "Flag duplicate transactions with same amount and vendor.",
     "Review any expense after 10 PM or before 6 AM."
   ];
